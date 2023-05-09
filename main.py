@@ -3,6 +3,13 @@ import streamlit as st
 
 import os
 
+st.title("🤖 Personalized Bot with fintech info 🧠 ")
+
+st.markdown(
+    """ 
+        #### 🗨️ Chat with a bot with additional information 📜 
+        """
+)
 #%%
 os.environ['OPENAI_API_KEY'] = st.secrets["key"]
 #%%
