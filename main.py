@@ -11,7 +11,7 @@ st.markdown(
         """
 )
 #%%
-os.environ['OPENAI_API_KEY'] = st.secrets["key"]
+os.environ['OPENAI_API_KEY'] = st.secrets.key
 #%%
 import chromadb
 from chromadb.config import Settings
