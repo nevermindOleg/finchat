@@ -4,7 +4,7 @@ import streamlit as st
 import os
 
 #%%
-os.environ['OPENAI_API_KEY'] = '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'
+os.environ['OPENAI_API_KEY'] = st.secrets["key"]
 #%%
 import chromadb
 from chromadb.config import Settings
