@@ -1,94 +1,72 @@
+# import databutton as db
 import streamlit as st
-
-
+from langchain.agents import Tool
+from langchain.chains.conversation.memory import ConversationBufferMemory
+from langchain.chat_models import ChatOpenAI
+from langchain.agents import initialize_agent
+from llama_index import StorageContext, load_index_from_storage
+from llama_index import GPTVectorStoreIndex, SimpleDirectoryReader
 import os
+# user = db.user.get()
+# name = user.name if user.name else "you"
 
-st.title("🤖 Personalized Bot with fintech info 🧠 ")
+
+# user = db.user.get()
+# name = user.name if user.name else "you"
+
+st.title("🤖 Personalized Bot with Memory 🧠 ")
 
 st.markdown(
     """ 
-        #### 🗨️ Chat with a bot with additional information 📜 
+        #### 🗨️ Chat with a bot with additional information 📜 with `Conversational Buffer Memory`  
+        > *powered by [LangChain]('https://langchain.readthedocs.io/en/latest/modules/memory.html#memory') + 
+        [OpenAI]('https://platform.openai.com/docs/models/gpt-3-5') + [Streamlit](https://docs.streamlit.io/) + [LlamaIndex](https://gpt-index.readthedocs.io/en/stable/index.html)*
+        ----
         """
 )
-#%%
+
+option = st.selectbox(
+    'Which data do you want to use?',
+    ('Finite-size effects of avalanche dynamics', 'A Review of ChatGPT Applications'))
+
+st.write('You selected:', option)
 os.environ['OPENAI_API_KEY'] = st.secrets.key
-#%%
-import chromadb
-from chromadb.config import Settings
+if option:
+    if option == 'Finite-size effects of avalanche dynamics':
+        storage_context = StorageContext.from_defaults(persist_dir="./storage1")
 
-client = chromadb.Client(Settings(
-    chroma_db_impl="duckdb+parquet",
-    persist_directory="./db" # Optional, defaults to .chromadb/ in the current directory
-))
-#%%
+    if option == 'A Review of ChatGPT Applications':
+        storage_context = StorageContext.from_defaults(persist_dir="./storage")
 
-#%%
-from langchain.vectorstores import Chroma
-from langchain.embeddings import OpenAIEmbeddings
-
-embeddings = OpenAIEmbeddings()
-global vectorstore
-try:
-    vectorstore = Chroma(collection_name="fomcpresconf", client=client, embedding_function=embeddings)
-except:
-    raise ValueError(f"vectorstore doesn't seem to load")
-
-#%%
-from langchain.chains.chat_vector_db.prompts import CONDENSE_QUESTION_PROMPT, QA_PROMPT
-from langchain.chains.question_answering import load_qa_chain
-from langchain import OpenAI, LLMChain
-
-from langchain.chains import ConversationalRetrievalChain
-from langchain.vectorstores import VectorStore
-
-
-def get_chain(
-    vectorstore: VectorStore
-) -> ConversationalRetrievalChain:
-    """Create a ConversationalRetrievalChain for question/answering."""
-    # Construct a ConversationalRetrievalChain with a streaming llm for combine docs
-    # and a separate, non-streaming llm for question generation
-
-    question_gen_llm = OpenAI(
-        temperature=0,
-        verbose=True,
-    )
-    streaming_llm = OpenAI(
-        streaming=True,
-        verbose=True,
-        temperature=0,
-    )
-
-    question_generator = LLMChain(
-        llm=question_gen_llm, prompt=CONDENSE_QUESTION_PROMPT
-    )
-    doc_chain = load_qa_chain(
-        streaming_llm, chain_type="stuff", prompt=QA_PROMPT
-    )
-
-    qa = ConversationalRetrievalChain(
-        retriever=vectorstore.as_retriever(),
-        combine_docs_chain=doc_chain,
-        question_generator=question_generator,
-        verbose=True
-    )
-    return qa
-
-#%%
-chat_history = []
-qa_chain = get_chain(vectorstore)
-#%%
-wtf = st.text_input(
+    index = load_index_from_storage(storage_context)
+    tools = [
+        Tool(
+            name="GPT Index",
+            func=lambda q: str(index.as_query_engine().query(q)),
+            description="useful for when you want to answer questions about the author. The input to this tool should be a complete english sentence.",
+            return_direct=True
+        ),
+    ]
+    if "memory" not in st.session_state:
+        st.session_state.memory = ConversationBufferMemory(
+            memory_key="chat_history"
+        )
+    llm = ChatOpenAI(temperature=0)
+    agent_chain = initialize_agent(tools, llm, agent="conversational-react-description", memory=st.session_state.memory)
+    wtf = st.text_input(
         "**What's on your mind?**",
         placeholder="Ask me anything from {}"
     )
 
-if wtf:
+    if wtf:
         with st.spinner(
                 "Generating Answer to your Query : `{}` ".format(wtf)
         ):
-            res = qa_chain(
-                {"question": wtf, "chat_history": chat_history}
-            )
-
-            st.info(res["answer"], icon="🤖")
+            res = agent_chain.run(input=wtf)
+            st.info(res, icon="🤖")
+    with st.expander("History/Memory"):
+        st.session_state.memory
+    if st.button('forget the context.'):
+        st.session_state.memory = ConversationBufferMemory(
+            memory_key="chat_history"
+        )
